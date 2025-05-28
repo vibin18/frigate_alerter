@@ -1,0 +1,92 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-camera"></i> Cameras</h2>
+    <span>Refresh time: <span id="refresh-time">Now</span></span>
+</div>
+
+<div id="camera-notification" class="alert alert-success d-none" role="alert"></div>
+
+<div class="row" id="camera-grid">
+    {{range .Cameras}}
+        {{template "camera_card" .}}
+    {{else}}
+        <div class="col-12">
+            <div class="alert alert-info">
+                No cameras found. Please make sure your Frigate server is properly configured.
+            </div>
+        </div>
+    {{end}}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const notification = document.getElementById('camera-notification');
+    
+    // Handle snapshot button clicks
+    document.querySelectorAll('.snapshot-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const camera = this.getAttribute('data-camera');
+            const button = this;
+            
+            // Disable button and show loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Taking...';
+            
+            // Send API request to trigger snapshot
+            fetch('/api/trigger', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ camera: camera }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Show success notification
+                notification.textContent = data.message;
+                notification.classList.remove('d-none', 'alert-danger');
+                notification.classList.add('alert-success');
+                
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-camera"></i> Take Snapshot';
+                
+                // Refresh the camera image
+                const img = button.closest('.card').querySelector('.camera-img');
+                const now = new Date().getTime();
+                img.src = img.src.split('&')[0] + '&_t=' + now;
+                
+                // Hide notification after 5 seconds
+                setTimeout(() => {
+                    notification.classList.add('d-none');
+                }, 5000);
+            })
+            .catch(error => {
+                // Show error notification
+                notification.textContent = 'Error taking snapshot: ' + error;
+                notification.classList.remove('d-none', 'alert-success');
+                notification.classList.add('alert-danger');
+                
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-camera"></i> Take Snapshot';
+            });
+        });
+    });
+    
+    // Update camera images every 30 seconds
+    function updateImages() {
+        document.querySelectorAll('.camera-img').forEach(img => {
+            const now = new Date().getTime();
+            img.src = img.src.split('&')[0] + '&_t=' + now;
+        });
+        
+        document.getElementById('refresh-time').textContent = new Date().toLocaleTimeString();
+    }
+    
+    // Set up periodic refresh
+    setInterval(updateImages, 30000);
+    document.getElementById('refresh-time').textContent = new Date().toLocaleTimeString();
+});
+</script>
+{{end}}

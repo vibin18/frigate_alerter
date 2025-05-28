@@ -130,9 +130,10 @@ func (r *SQLiteAlertRepository) scanAlerts(rows *sql.Rows) ([]*domain.Alert, err
 			return nil, err
 		}
 		
-		// Parse the timestamp
-		t, err := time.Parse("2006-01-02 15:04:05.999999999-07:00", triggeredAt)
+		// Parse the timestamp - try multiple formats to handle different database outputs
+		t, err := parseTime(triggeredAt)
 		if err != nil {
+			slog.Error("Failed to parse timestamp", "timestamp", triggeredAt, "error", err)
 			return nil, err
 		}
 		alert.TriggeredAt = t
@@ -145,6 +146,32 @@ func (r *SQLiteAlertRepository) scanAlerts(rows *sql.Rows) ([]*domain.Alert, err
 	}
 	
 	return alerts, nil
+}
+
+// parseTime attempts to parse a timestamp string in multiple formats
+func parseTime(timeStr string) (time.Time, error) {
+	// Try different time formats
+	formats := []string{
+		"2006-01-02 15:04:05.999999999-07:00", // SQLite default format
+		"2006-01-02T15:04:05.999999999-07:00",  // ISO 8601 format
+		"2006-01-02 15:04:05Z07:00",            // Simplified format
+		"2006-01-02T15:04:05Z07:00",            // Another common format
+		"2006-01-02 15:04:05",                  // Simple format without timezone
+		"2006-01-02T15:04:05",                  // Simple ISO format
+	}
+
+	var firstErr error
+	for _, format := range formats {
+		t, err := time.Parse(format, timeStr)
+		if err == nil {
+			return t, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return time.Time{}, firstErr
 }
 
 // Close closes the database connection

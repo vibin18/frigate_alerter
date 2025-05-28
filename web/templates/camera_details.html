@@ -1,0 +1,217 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-camera"></i> {{.CameraName}} Camera</h2>
+    <div>
+        <button id="refresh-btn" class="btn btn-outline-primary me-2">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <button id="snapshot-btn" class="btn btn-primary" data-camera="{{.CameraName}}">
+            <i class="bi bi-camera"></i> Take Snapshot
+        </button>
+    </div>
+</div>
+
+<div id="camera-notification" class="alert alert-success d-none" role="alert"></div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Live View</h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="http://{{$.Config.FrigateServer}}:{{$.Config.FrigatePort}}/api/{{.CameraName}}/latest.jpg?h=600" 
+                     id="camera-feed" class="img-fluid" alt="{{.CameraName}} camera feed">
+                <div class="text-muted mt-2">
+                    Last updated: <span id="last-updated">Just now</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Camera Details</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Name
+                        <span class="badge bg-primary rounded-pill">{{.CameraName}}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Alert Count
+                        <span class="badge bg-secondary rounded-pill">{{len .Alerts}}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Latest Alert
+                        {{if .Alerts}}
+                            <span class="badge bg-info rounded-pill">{{(index .Alerts 0).TriggeredAt.Format "2006-01-02 15:04:05"}}</span>
+                        {{else}}
+                            <span class="badge bg-secondary rounded-pill">None</span>
+                        {{end}}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Recent Alerts</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Alerts}}
+                        <tr>
+                            <td>{{.TriggeredAt.Format "2006-01-02 15:04:05"}}</td>
+                            <td>{{.Type}}</td>
+                            <td>{{.AlertMessage}}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary resend-btn" data-camera="{{$.CameraName}}">
+                                    <i class="bi bi-send"></i> Resend
+                                </button>
+                            </td>
+                        </tr>
+                    {{else}}
+                        <tr>
+                            <td colspan="4" class="text-center">No alerts found for this camera</td>
+                        </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const notification = document.getElementById('camera-notification');
+    const cameraFeed = document.getElementById('camera-feed');
+    const lastUpdated = document.getElementById('last-updated');
+    const snapshotBtn = document.getElementById('snapshot-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const camera = snapshotBtn.getAttribute('data-camera');
+    
+    // Update timestamp function
+    function updateTimestamp() {
+        lastUpdated.textContent = new Date().toLocaleTimeString();
+    }
+    
+    // Refresh image function
+    function refreshImage() {
+        const now = new Date().getTime();
+        cameraFeed.src = cameraFeed.src.split('&')[0] + '&_t=' + now;
+        updateTimestamp();
+    }
+    
+    // Refresh button
+    refreshBtn.addEventListener('click', refreshImage);
+    
+    // Auto refresh every 30 seconds
+    setInterval(refreshImage, 30000);
+    
+    // Snapshot button
+    snapshotBtn.addEventListener('click', function() {
+        // Disable button and show loading state
+        snapshotBtn.disabled = true;
+        snapshotBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Taking...';
+        
+        // Send API request to trigger snapshot
+        fetch('/api/trigger', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ camera: camera }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Show success notification
+            notification.textContent = data.message;
+            notification.classList.remove('d-none', 'alert-danger');
+            notification.classList.add('alert-success');
+            
+            // Reset button state
+            snapshotBtn.disabled = false;
+            snapshotBtn.innerHTML = '<i class="bi bi-camera"></i> Take Snapshot';
+            
+            // Refresh the camera image
+            refreshImage();
+            
+            // Hide notification after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('d-none');
+            }, 5000);
+        })
+        .catch(error => {
+            // Show error notification
+            notification.textContent = 'Error taking snapshot: ' + error;
+            notification.classList.remove('d-none', 'alert-success');
+            notification.classList.add('alert-danger');
+            
+            // Reset button state
+            snapshotBtn.disabled = false;
+            snapshotBtn.innerHTML = '<i class="bi bi-camera"></i> Take Snapshot';
+        });
+    });
+    
+    // Resend buttons
+    document.querySelectorAll('.resend-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const btn = this;
+            
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+            
+            // Send API request to trigger snapshot
+            fetch('/api/trigger', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ camera: camera }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Show success notification
+                notification.textContent = data.message;
+                notification.classList.remove('d-none', 'alert-danger');
+                notification.classList.add('alert-success');
+                
+                // Reset button state
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Resend';
+                
+                // Hide notification after 5 seconds
+                setTimeout(() => {
+                    notification.classList.add('d-none');
+                }, 5000);
+            })
+            .catch(error => {
+                // Show error notification
+                notification.textContent = 'Error taking snapshot: ' + error;
+                notification.classList.remove('d-none', 'alert-success');
+                notification.classList.add('alert-danger');
+                
+                // Reset button state
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Resend';
+            });
+        });
+    });
+});
+</script>
+{{end}}

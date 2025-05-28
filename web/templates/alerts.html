@@ -1,0 +1,209 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-bell"></i> Alert History</h2>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header">
+        <ul class="nav nav-pills card-header-pills" id="alertsTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="all-alerts-tab" data-bs-toggle="pill" data-bs-target="#all-alerts" type="button" role="tab">All Alerts</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="by-camera-tab" data-bs-toggle="pill" data-bs-target="#by-camera" type="button" role="tab">By Camera</button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="alertsTabContent">
+            <div class="tab-pane fade show active" id="all-alerts" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Camera</th>
+                                <th>Time</th>
+                                <th>Alert Type</th>
+                                <th>Alert Message</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Alerts}}
+                                <tr>
+                                    <td>
+                                        <a href="/camera/{{.CameraName}}">{{.CameraName}}</a>
+                                    </td>
+                                    <td>{{.TriggeredAt.Format "2006-01-02 15:04:05"}}</td>
+                                    <td>{{.Type}}</td>
+                                    <td>{{.AlertMessage}}</td>
+                                    <td>
+                                        <a href="http://{{$.Config.FrigateServer}}:{{$.Config.FrigatePort}}/api/{{.CameraName}}/latest.jpg?h=300" 
+                                           target="_blank" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-image"></i> View Image
+                                        </a>
+                                        <button class="btn btn-sm btn-secondary resend-btn" data-camera="{{.CameraName}}">
+                                            <i class="bi bi-send"></i> Resend
+                                        </button>
+                                    </td>
+                                </tr>
+                            {{else}}
+                                <tr>
+                                    <td colspan="5" class="text-center">No alerts found</td>
+                                </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="by-camera" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <select class="form-select" id="camera-filter">
+                            <option value="">Select a camera</option>
+                            <!-- Camera options will be populated by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="camera-alerts-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Alert Type</th>
+                                <th>Alert Message</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="text-center">Select a camera to view its alerts</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="alert-notification" class="alert alert-success d-none" role="alert"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const notification = document.getElementById('alert-notification');
+    
+    // Handle resend button clicks
+    document.querySelectorAll('.resend-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const camera = this.getAttribute('data-camera');
+            const button = this;
+            
+            // Disable button and show loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+            
+            // Send API request to trigger snapshot
+            fetch('/api/trigger', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ camera: camera }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Show success notification
+                notification.textContent = data.message;
+                notification.classList.remove('d-none', 'alert-danger');
+                notification.classList.add('alert-success');
+                
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-send"></i> Resend';
+                
+                // Hide notification after 5 seconds
+                setTimeout(() => {
+                    notification.classList.add('d-none');
+                }, 5000);
+            })
+            .catch(error => {
+                // Show error notification
+                notification.textContent = 'Error taking snapshot: ' + error;
+                notification.classList.remove('d-none', 'alert-success');
+                notification.classList.add('alert-danger');
+                
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-send"></i> Resend';
+            });
+        });
+    });
+    
+    // Load cameras for filter dropdown
+    fetch('/api/cameras')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('camera-filter');
+            data.forEach(camera => {
+                const option = document.createElement('option');
+                option.value = camera.name;
+                option.textContent = camera.name;
+                select.appendChild(option);
+            });
+        });
+    
+    // Filter alerts by camera
+    document.getElementById('camera-filter').addEventListener('change', function() {
+        const camera = this.value;
+        if (!camera) return;
+        
+        fetch(`/api/alerts?camera=${camera}`)
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.querySelector('#camera-alerts-table tbody');
+                tableBody.innerHTML = '';
+                
+                if (data.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = '<td colspan="4" class="text-center">No alerts found for this camera</td>';
+                    tableBody.appendChild(row);
+                    return;
+                }
+                
+                data.forEach(alert => {
+                    const row = document.createElement('tr');
+                    const date = new Date(alert.triggered_at);
+                    
+                    row.innerHTML = `
+                        <td>${date.toLocaleString()}</td>
+                        <td>${alert.type}</td>
+                        <td>${alert.alert_message}</td>
+                        <td>
+                            <a href="http://{{$.Config.FrigateServer}}:{{$.Config.FrigatePort}}/api/${alert.camera_name}/latest.jpg?h=300" 
+                               target="_blank" class="btn btn-sm btn-primary">
+                                <i class="bi bi-image"></i> View Image
+                            </a>
+                            <button class="btn btn-sm btn-secondary resend-btn" data-camera="${alert.camera_name}">
+                                <i class="bi bi-send"></i> Resend
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // Re-attach event listeners to new buttons
+                document.querySelectorAll('#camera-alerts-table .resend-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const camera = this.getAttribute('data-camera');
+                        // Same handling as above, but for dynamically created buttons
+                        // Call the same trigger endpoint with camera name
+                        // ...
+                    });
+                });
+            });
+    });
+});
+</script>
+{{end}}

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/vibin/frigate_alerter/internal/adapters"
@@ -78,10 +79,33 @@ func main() {
 	slog.Info("Frigate Alerter service started successfully")
 	slog.Info("Listening for events", "mqtt_server", cfg.MQTTServer)
 
+	// Create the Frigate service
+	frigateService := adapters.NewFrigateService(cfg)
+	
+	// Create the HTTP server
+	httpServer := adapters.NewHTTPServer(repository, notifier, frigateService, cfg)
+	
+	// Start the HTTP server in a separate goroutine
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := httpServer.Start(); err != nil {
+			slog.Error("HTTP server error", "error", err)
+		}
+	}()
+	
+	slog.Info("Frigate Alerter service is running", "web_ui", "http://localhost:"+cfg.ServerPort)
+	
 	// Wait for termination signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
-
+	
 	slog.Info("Shutting down Frigate Alerter service")
+	
+	// Shut down the HTTP server
+	if err := httpServer.Stop(); err != nil {
+		slog.Error("Error stopping HTTP server", "error", err)
+	}
 }

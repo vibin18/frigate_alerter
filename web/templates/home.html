@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="jumbotron bg-light p-5 rounded">
+    <h1 class="display-4">Frigate CCTV Alerter</h1>
+    <p class="lead">Monitor your cameras and receive instant Discord notifications when activity is detected.</p>
+    <hr class="my-4">
+    <p>View live camera feeds, browse past alerts, and manually trigger snapshots.</p>
+    <div class="d-flex gap-2">
+        <a class="btn btn-primary" href="/cameras">
+            <i class="bi bi-camera"></i> View Cameras
+        </a>
+        <a class="btn btn-secondary" href="/alerts">
+            <i class="bi bi-bell"></i> View Alerts
+        </a>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center p-4">
+            <div class="card-body">
+                <i class="bi bi-camera-video text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Live Monitoring</h5>
+                <p class="card-text">View your cameras and take on-demand snapshots.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center p-4">
+            <div class="card-body">
+                <i class="bi bi-bell text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Instant Alerts</h5>
+                <p class="card-text">Receive Discord notifications when activity is detected.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center p-4">
+            <div class="card-body">
+                <i class="bi bi-archive text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Alert History</h5>
+                <p class="card-text">Browse through past alert events.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
