@@ -33,8 +33,14 @@ func main() {
 	
 	slog.Info("Configuration loaded successfully", "frigate_server", cfg.FrigateServer, "mqtt_server", cfg.MQTTServer, "time_zone", cfg.TimeZone)
 
-	// Create SQLite repository
-	repository, err := adapters.NewSQLiteAlertRepository("./alerts.db", cfg.Location)
+	// Ensure data directory exists
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		slog.Error("Failed to create data directory", "error", err)
+		os.Exit(1)
+	}
+
+	// Create SQLite repository with database file in the data directory
+	repository, err := adapters.NewSQLiteAlertRepository("./data/alerts.db", cfg.Location)
 	if err != nil {
 		slog.Error("Failed to create SQLite repository", "error", err)
 		os.Exit(1)
